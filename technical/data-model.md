@@ -1,36 +1,66 @@
 # 핵심 데이터 모델
 
+MVP 구현 스택·API·인증·앱 분리는 [MVP 스택·API 설계](./mvp-stack.md), 상위 아키텍처는 [시스템 아키텍처](./architecture.md)를 참고한다.
+
 ## 1. 엔티티 관계 개요
 
 ```
-Partner (거래처)
-    ├── PartnerPriceTier (공급가 그룹)
+User (AbstractUser 상속, accounts)
+    ├── partner_id (FK → Partner, nullable)  # 잠재 바이어는 null
+    ├── price_tier_id (FK, nullable)         # 신규 웹 기본 티어 등 (선택)
+    ├── Cart / CartItem
     └── Order (주문)
             └── OrderItem (주문 항목)
+
+Partner (거래처)
+    ├── PartnerPriceTier (공급가 그룹)
+    └── (선택) 연결된 User 다수
 
 Product (상품)
     ├── ProductCategory (카테고리)
     ├── Artist (아티스트)
     ├── ProductVariant (버전/옵션)
-    ├── ProductStock (재고)
-    └── ProductPrice (거래처별 가격)
+    ├── ProductImage (다매체)
+    ├── ProductStock (재고, 또는 variant 단위)
+    └── ProductPrice (티어별 가격)
 
-NewRelease (신보 안내)
-    └── NewReleaseSource (원본 이메일/파일)
+NewRelease (신보 원천 추적) — 이메일 파싱 도입 시 활성화, MVP는 미사용 가능
 ```
 
 ---
 
 ## 2. 주요 엔티티 상세
 
+### User (계정, `AbstractUser` 상속)
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| id | UUID 또는 bigint | |
+| email | string | 로그인 ID (`USERNAME_FIELD`) |
+| password | hash | Django 기본 |
+| is_staff | boolean | 어드민 API·Next 어드민 접근 |
+| is_active | boolean | 가입 직후 false 등 이메일 인증 정책에 맞게 사용 |
+| phone | string | 선택 |
+| company_name | string | 선택 |
+| partner_id | FK | `Partner`, 잠재 바이어는 null |
+| price_tier_id | FK | 신규 웹 바이어 기본 티어 (선택) |
+| email_verified_at | datetime | null이면 미인증 (권장) |
+
 ### Product (상품)
 
 | 필드 | 타입 | 설명 |
 |------|------|------|
 | id | UUID | 상품 고유 ID |
+| slug | string | URL·SEO용, unique |
 | name | string | 상품명 |
 | name_en | string | 영문명 (글로벌 대응) |
 | name_ja | string | 일문명 (일본 수입 상품) |
+| meta_title | string | SEO title (nullable) |
+| meta_description | text | SEO description (nullable) |
+| og_image | FK 또는 URL | SNS 미리보기 (nullable) |
+| is_published | boolean | 공개 여부 |
+| published_at | datetime | 공개 시각 (nullable) |
+| robots_noindex | boolean | 검색 제외 필요 시 |
 | category_id | FK | 카테고리 참조 |
 | artist_id | FK | 아티스트 참조 (nullable) |
 | jan_code | string | JAN/EAN 바코드 |
@@ -88,16 +118,24 @@ NewRelease (신보 안내)
 | preferred_categories | array | 관심 카테고리 (알림 필터용) |
 | status | enum | ACTIVE / INACTIVE / PENDING |
 
+### Cart / CartItem (장바구니, MVP)
+
+| 엔티티 | 필드 요약 |
+|--------|-----------|
+| Cart | `user_id` (FK), `updated_at` — MVP는 **회원 전용** 권장 ([mvp-stack.md](./mvp-stack.md)) |
+| CartItem | `cart_id`, `product_id`, `variant_id` (nullable), `quantity` |
+
 ### Order (주문)
 
 | 필드 | 타입 | 설명 |
 |------|------|------|
 | id | UUID | |
 | order_no | string | 주문번호 (수주서 번호) |
-| partner_id | FK | 거래처 참조 |
-| status | enum | RECEIVED / CONFIRMED / PURCHASING / SHIPPED / SETTLED |
+| user_id | FK | 주문자(필수) — 잠재·신규 바이어 포함 |
+| partner_id | FK | 기존 거래처 연동 시만 설정, 잠재 바이어는 null |
+| status | enum | RECEIVED / CONFIRMED / … (MVP는 RECEIVED·CONFIRMED 중심) |
 | order_type | enum | PRE_ORDER / IN_STOCK |
-| payment_status | enum | PENDING / PAID / INVOICED |
+| payment_status | enum | MVP PG 없을 때 `QUOTE_PENDING` / `NOT_APPLICABLE` 등 정책에 맞게 정의 |
 | total_amount | decimal | 총 주문금액 |
 | notes | text | 비고 |
 | created_at | timestamp | 주문 접수일 |
@@ -118,7 +156,9 @@ NewRelease (신보 안내)
 
 ### NewRelease (신보 안내)
 
-이메일에서 파싱된 신보 안내 원본을 추적하기 위한 엔티티
+**MVP(수동 카탈로그)에서는 테이블 생략 가능.** 이메일 파싱 도입 시, 파싱 원천 추적용으로 추가한다.
+
+이메일에서 파싱된 신보 안내 원본을 추적하기 위한 엔티티(후속)
 
 | 필드 | 타입 | 설명 |
 |------|------|------|

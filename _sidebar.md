@@ -1,6 +1,7 @@
 - **개요**
   - [프로젝트 개요](overview/project-overview.md)
   - [벤치마크 분석](overview/benchmark-analysis.md)
+  - [문서 구조·관리 가이드](documentation-guide.md)
 
 - **비즈니스**
   - [핵심 업무 프로세스](business/process-flow.md)
@@ -9,6 +10,7 @@
 
 - **기술**
   - [시스템 아키텍처](technical/architecture.md)
+  - [MVP 스택·API 설계](technical/mvp-stack.md)
   - [데이터 모델](technical/data-model.md)
   - [자동화 전략](technical/automation.md)
 
